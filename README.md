@@ -1,17 +1,42 @@
-# Grow Automation — Build Guide
+# Grow Automation
 
-Open-source Home Assistant + ESPHome automation for indoor gardens. Licensed
-under the [MIT License](LICENSE).
+Open-source Home Assistant + ESPHome automation for indoor gardens: humidity
+control, light schedules, and soil-moisture-driven drip watering. ESP32 +
+BME280 sensors, off-the-shelf smart plugs, and one pump. You do no mains
+wiring, and everything runs locally with no cloud. MIT licensed.
 
 ![Dashboard demo](docs/dashboard-demo.gif)
 
 *The dashboard on a phone (a screen recording of a working install; [full-quality video](docs/dashboard-demo.mp4)). The recording is from an earlier version, so your entity names and cards may differ slightly.*
 
-Covers a shared humidity "lung room" feeding a 4x4 and a 5x5 tent, with
-automatic humidity control, light schedules, feed/water logging, and
-soil-moisture-driven drip watering, on self-hosted Home Assistant.
-Requires Home Assistant 2024.10 or newer. Auto-watering is documented in
-`WATERING.md`. (Other tents, such as a clone or seedling tent, are not automated.)
+## What it does
+
+- **Humidity control** with hysteresis, so plugs don't chatter, and
+  failsafes that act or alert if a sensor goes offline.
+- **Light schedules** per tent, set from dashboard settings (no code edits).
+- **Soil-moisture-driven drip watering** with pump health checks and a
+  runaway cutoff. See [`WATERING.md`](WATERING.md).
+- **Feed and water logging**, a 9 AM reminder, and a phone-friendly dashboard.
+
+## What you need
+
+Home Assistant 2024.10 or newer, up to three ESP32 boards with BME280
+sensors, smart plugs, and a pump. Parts and prices are in
+[`SHOPPING-LIST.md`](SHOPPING-LIST.md) and
+[`SHOPPING-LIST-WATERING.md`](SHOPPING-LIST-WATERING.md).
+
+## About this build
+
+The example setup is a shared humidity "lung room" feeding a 4x4 and a 5x5
+tent. The YAML is split per tent and per sensor node, so you can adapt it to
+your own layout. Other tents, such as a clone or seedling tent, are not
+automated.
+
+> **Project status:** the climate, lighting, and dashboard parts come from a
+> working install. The watering package's configuration validates with
+> `esphome config`, but it has not yet been tested on real hardware (see the
+> end of [`WATERING.md`](WATERING.md)). Test it with the pump disconnected
+> first, and please report what you find.
 
 > **Safety:** this project switches mains-powered devices (pump, lights,
 > humidifier, dehumidifier) through off-the-shelf smart plugs. You do no mains
