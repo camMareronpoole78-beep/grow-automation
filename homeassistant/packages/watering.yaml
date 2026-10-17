@@ -1,24 +1,25 @@
 # watering.yaml  (Home Assistant package) -- single-pump drip watering, 4x4 + 5x5.
-# The existing submersible pump in the reservoir can runs ALL FIVE 20-gal pots at once
+# One submersible pump in the reservoir runs ALL FIVE pots at once
 # (1 in the 4x4, 4 in the 5x5) through one drip line. No valves, no manifold, no closet
-# board. The pump is on a Shelly Plug US Gen4 renamed "Reservoir Pump", with its own
-# auto-off timer set to 900 s (15 min) in the Shelly app as the safety backstop.
+# board. The pump is on a smart plug (with power monitoring) renamed "Reservoir Pump",
+# with its own auto-off timer set to 900 s (15 min) in the plug's settings as the
+# safety backstop.
 # Any other tent is watered by hand, and feeding stays manual.
 #
 # SIZING: every pot gets the same drippers and they all run together, so
 #   run time (min)  = gallons per pot / dripper GPH per pot x 60
 #   water per cycle = total pots x gallons per pot   (5 x 1.5 = 7.5 gal by default)
-# split into pulses with soak breaks so the living soil absorbs it.
+# split into pulses with soak breaks so the growing medium absorbs it.
 #
 # WINDOW: only while BOTH tents' lights are on, from your existing light_4x4 / light_5x5
-# on and off times (currently 7 PM to 7 AM).
+# on and off times (set on the dashboard).
 #
 # RESERVOIR: HA keeps a running estimate of gallons in the can (it subtracts each pulse).
 # Press "Reservoir refilled" after you fill it. Watering is refused if a cycle would
 # take the can below the reserve. If you add the optional float switch
 # (esphome/reservoir-float.yaml on one tent board), that stops it too.
 #
-# Entity names assumed: switch.reservoir_pump, sensor.reservoir_pump_power (Shelly),
+# Entity names assumed: switch.reservoir_pump, sensor.reservoir_pump_power (from the pump's smart plug),
 # sensor.4x4_tent_soil_moisture, sensor.5x5_tent_soil_moisture (existing tent boards),
 # optional binary_sensor.4x4_tent_reservoir_low or binary_sensor.5x5_tent_reservoir_low,
 # notify.my_phone.
@@ -63,7 +64,7 @@ input_number:
   water_gal_per_pot:
     name: Gallons per pot
     min: 0.5
-    max: 2.0                    # BuildASoil: 5-10% of soil volume = 1-2 gal for 20 gal
+    max: 2.0                    # rule of thumb: 5-10% of soil volume = 1-2 gal for a 20 gal pot
     step: 0.25
     initial: 1.5
     unit_of_measurement: gal
@@ -195,7 +196,7 @@ script:
         then:
           - action: notify.my_phone
             data:
-              message: "Watering would need {{ (pulse_s / 60) | round(1) }} min pulses, over the 12 min limit (Shelly auto-off is 15). Add pulses or use faster drippers."
+              message: "Watering would need {{ (pulse_s / 60) | round(1) }} min pulses, over the 12 min limit (the plug's auto-off is 15). Add pulses or use faster drippers."
           - stop: pulse too long
       - if:
           - "{{ states('input_number.reservoir_gallons') | float(0) - cycle_gal
@@ -240,7 +241,7 @@ script:
                   data:
                     message: >-
                       Stopped watering: the pump is drawing {{ watts }} W
-                      {{ '(no power, or the Shelly is offline: tripped GFCI, dead pump, or Wi-Fi?)' if watts < 2 else '(below normal: running dry or clogged intake?)' }}
+                      {{ '(no power, or the pump plug is offline: tripped GFCI, dead pump, or Wi-Fi?)' if watts < 2 else '(below normal: running dry or clogged intake?)' }}
                 - stop: pump power abnormal
             - delay: "{{ [ (pulse_s | int) - 8, 1 ] | max }}"
             - action: switch.turn_off
@@ -378,7 +379,7 @@ automation:
           message: Float switch says the reservoir is low. Pump stopped.
 
   - id: pump_runaway
-    alias: Pump on too long, turn it off (backup to the Shelly auto-off)
+    alias: Pump on too long, turn it off (backup to the plug's auto-off)
     triggers:
       - trigger: state
         entity_id: switch.reservoir_pump

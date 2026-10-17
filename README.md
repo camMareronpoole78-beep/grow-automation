@@ -20,9 +20,18 @@ wiring, and everything runs locally with no cloud. MIT licensed.
 
 ## What you need
 
-Home Assistant 2024.10 or newer, up to three ESP32 boards with BME280
-sensors, smart plugs, and a pump. Parts and prices are in
-[`SHOPPING-LIST.md`](SHOPPING-LIST.md) and
+**Assumed prerequisites.** This project automates a grow setup you already
+have. It does not include or cover these, so you will need:
+
+- One or more **grow tents**
+- **Lights** for each tent
+- A **humidifier**
+- A **dehumidifier**
+
+**What this project adds:** Home Assistant 2024.10 or newer, up to three
+ESP32 boards with BME280 sensors, smart plugs for the lights and
+humidity gear, and (for auto-watering) a pump with its own smart plug. Example
+parts and prices are in [`SHOPPING-LIST.md`](SHOPPING-LIST.md) and
 [`SHOPPING-LIST-WATERING.md`](SHOPPING-LIST-WATERING.md).
 
 ## About this build
@@ -44,51 +53,25 @@ automated.
 > plug's rating, and keep a manual way to shut everything off. Nothing here
 > has been certified or tested on your hardware. You use it at your own risk.
 
-## Running on the laptop now, moving to the Pi later
+## Where to run Home Assistant
 
-To cut cost up front, run Home Assistant OS in a free VirtualBox VM on
-your spare laptop instead of buying the Pi right now — same OS, same
-Supervisor, same add-on store as the Pi will run, so nothing in the rest
-of this guide changes and nothing has to be redone when you switch.
+Any always-on Home Assistant install works: Home Assistant OS on a
+Raspberry Pi or a small PC, or a virtual machine on a computer you leave
+running. Follow the official install guide for your hardware at
+[home-assistant.io/installation](https://www.home-assistant.io/installation/).
+Use an install that has the add-on store (Home Assistant OS or Supervised),
+because this guide uses add-ons.
 
-1. Install VirtualBox (free, virtualbox.org — same tool regardless of
-   whether the laptop runs Windows, Mac, or Linux).
-2. Download the official HAOS VirtualBox image from
-   home-assistant.io/installation/alternative/ (look for the VirtualBox
-   `.vdi`/OVA under the x86-64 section — that's the right architecture
-   for a laptop, unlike the Pi's ARM image).
-3. New VM in VirtualBox: **at least 2048 MB RAM, 2 CPUs, UEFI enabled**
-   (Settings > System > Motherboard > check "Enable EFI") — HAOS won't
-   boot without UEFI on. Point the VM's disk at the downloaded image
-   instead of creating a new one.
-4. Boot it, then continue at step 2 below exactly as written — the VM
-   answers to `homeassistant.local:8123` same as the Pi would.
-
-**The laptop has to stay on and awake the whole time this is your hub** —
-no sleep, no closed-lid suspend (Windows: Settings > System > Power >
-Screen and sleep > set sleep to Never while plugged in; also uncheck
-"sleep when lid is closed" in Control Panel > Power Options if it's a
-laptop with a lid you'll close). If it sleeps, the humidity automation
-and feed reminders stop running with it — worth being deliberate about
-since that's not just "the dashboard's offline," it's "nothing's
-watching the dehumidifier."
-
-**Moving to the Pi later:** once you've got the CanaKit, take a full
-backup from the laptop instance (Settings > System > Backups > Create
-Backup), flash HAOS onto the Pi's SD card (same Raspberry Pi Imager step
-below), boot it, and restore that backup during its onboarding wizard.
-Everything — helpers, automations, dashboard, the ESPHome/smart plug
-integrations — comes across in one shot. No redoing any of the steps below.
+**The host has to stay on and awake whenever it is your hub.** If it
+sleeps, the humidity automation and feed reminders stop running with it.
+That is not just "the dashboard is offline," it is "nothing is watching the
+dehumidifier."
 
 ## Setup order
 
-1. **Flash HAOS and boot the Pi.** The CanaKit in SHOPPING-LIST.md ships
-   with plain Raspberry Pi OS preloaded, not HAOS — download the free
-   Raspberry Pi Imager (imager.raspberrypi.com), pick "Other specific-purpose
-   OS" > "Home Assistant" > "Home Assistant OS" as the image, target the
-   kit's microSD, and write it (~10 min, overwrites the preloaded OS on
-   purpose). Boot the Pi, then finish the Home Assistant onboarding wizard
-   in a browser at `homeassistant.local:8123`.
+1. **Install Home Assistant.** Follow the section above, then finish the
+   Home Assistant onboarding wizard in a browser (usually at
+   `homeassistant.local:8123`).
 
 2. **Install the HA Companion app** on your phone, log into your HA
    instance. Note the exact `notify.mobile_app_...` entity it creates
@@ -98,20 +81,15 @@ integrations — comes across in one shot. No redoing any of the steps below.
    `packages/watering.yaml`.
 
 3. **Set up the 4 smart plugs** (humidifier, dehumidifier, 4x4 light, 5x5 light).
-   The pump gets its own Shelly plug, see `WATERING.md`.
-   Depends which you bought (SHOPPING-LIST.md):
-   - **Kasa Matter KP125M (recommended/cheaper):** enable Matter in HA
-     first — Settings > Devices & Services > Add Integration > "Matter"
-     (HAOS installs the Matter Server add-on automatically the first time).
-     Pair each plug in the Kasa app, generate its Matter pairing code/QR
-     there, then in HA's Matter integration choose "Add Device" and scan/enter
-     that code. No TP-Link cloud account is used by HA at any point in this —
-     the Kasa app is only there to get the plug onto your wifi and produce
-     the Matter code.
-   - **Shelly Plug US Gen4 (alternative):** set up via the Shelly app, then
-     Settings > Devices & Services > Add Integration > Shelly in HA (finds
-     them locally on your network, no cloud account needed).
-   - Either way, rename the resulting `switch.*` entities to
+   The pump gets its own plug, see `WATERING.md`.
+   - Use any smart plug that Home Assistant can control locally (Matter,
+     Zigbee, Z-Wave, ESPHome/Tasmota, or a Wi-Fi plug with a local
+     Home Assistant integration). Pick plugs rated for the load, and see
+     `SHOPPING-LIST.md` for examples.
+   - Pair each plug with Home Assistant using its integration (Settings >
+     Devices & Services > Add Integration). Local control is preferred so
+     nothing depends on a vendor cloud account.
+   - Rename the resulting `switch.*` entities to
      `switch.humidifier`, `switch.dehumidifier`, `switch.light_4x4`, and
      `switch.light_5x5` — or rename them however you like and update
      `automations.yaml`/`dashboard.yaml` to match.
@@ -130,14 +108,13 @@ integrations — comes across in one shot. No redoing any of the steps below.
    After the first flash they update over wifi (OTA) — no more USB needed.
    They'll auto-discover into HA within a minute or two of booting.
 
-5. **Set up the 2 Reolink E1 cameras** (4x4, 5x5). Pair each in the Reolink app first (sets it up on your wifi,
-   gives it a static-friendly local IP), then in HA: Settings > Devices &
-   Services > Add Integration > "Reolink" > enter the camera's local IP,
-   port 80, and its Reolink app username/password. Rename the resulting
-   `camera.*` entities to `camera.tent_4x4` and `camera.tent_5x5` — or
-   rename them however you like and update `dashboard.yaml` to match.
-   No Reolink cloud account is needed for this — the integration talks to
-   the camera directly over your LAN.
+5. **(Optional) Set up a camera for each tent.** The dashboard has camera
+   cards for the 4x4 and 5x5. Use any camera with a Home Assistant
+   integration (local control preferred), add it under Settings > Devices &
+   Services > Add Integration, and rename the resulting `camera.*` entities to
+   `camera.tent_4x4` and `camera.tent_5x5` — or rename them however you like
+   and update `dashboard.yaml` to match. Skip this step and remove the camera
+   cards from `dashboard.yaml` if you don't use cameras.
 
 6. **Add the helpers.** Paste the contents of `homeassistant/helpers.yaml`
    into the matching `input_number:` / `input_datetime:` / `input_button:`
@@ -169,31 +146,27 @@ integrations — comes across in one shot. No redoing any of the steps below.
    reasonable dry-climate floor), `humidity_hysteresis` (3), and each tent's
    light on/off times. HA remembers them across restarts.
 
-10. **Wall-mount the spare iPad as a live dashboard.** Free, since you
-   already own it — install the Home Assistant app from the App Store,
-   log into your HA instance, and set it to open straight to the Grow
-   dashboard. Then:
-   - **Settings > Display & Brightness > Auto-Lock > Never** — it needs
-     to stay awake since it's a wall display, not a phone.
-   - **Settings > Accessibility > Guided Access > On**, then triple-click
-     the side/home button inside the HA app to lock the iPad to just that
-     app — stops it from wandering off to the lock screen or another app
-     if it gets bumped.
-   - Keep it plugged into power full-time — Guided Access + always-on
-     screen will drain a battery fast otherwise.
-   - Any basic iPad wall/tent mount works — nothing HA-specific needed.
-   The iPad is a display only, not the hub — the Pi still has to be
-   running underneath it for this to show anything.
+10. **(Optional) Wall-mount a spare tablet as a live dashboard.** Install
+   the Home Assistant app on the tablet, log into your HA instance, and set
+   it to open straight to the Grow dashboard. Then:
+   - Turn off auto-lock / screen sleep, since it is a wall display, not a
+     phone.
+   - If your tablet has a kiosk or single-app mode, turn it on so the
+     display can't wander off to another app if it gets bumped.
+   - Keep it plugged into power full-time, because an always-on screen will
+     drain a battery fast.
+   The tablet is a display only, not the hub. Your Home Assistant host still
+   has to be running for it to show anything.
 
-11. **Set up Tailscale for remote access.** Everything above only works on
+11. **(Optional) Set up remote access (example: Tailscale).** Everything above only works on
     your home wifi by default — this is what lets you check the dashboard
     and camera feeds from your phone/laptop when you're not home, without
     a subscription or opening any ports to the internet.
-    - On the HA host (Pi or the laptop VM): Settings > Add-ons > Add-on
+    - On the HA host: Settings > Add-ons > Add-on
       Store > search "Tailscale" > install the official add-on > start it
       > follow the login link it gives you to add this HA instance to
       your Tailscale network (a free "tailnet," up to 100 devices).
-    - Install the Tailscale app on your phone, and on the iPad if you want
+    - Install the Tailscale app on your phone, and on the tablet if you want
       it reachable there too when off wifi, and on any computer you'll
       check this from — sign into the same tailnet on each.
     - Once connected, reach HA from anywhere at its Tailscale address
@@ -329,9 +302,9 @@ remembers your values across restarts, except where noted.
   humidifier is switched off and you're notified; if both tent sensors are
   offline you're notified. If only one tent sensor is offline, the other one
   keeps driving the dehumidifier.
-- The AC Infinity controller on the 4x4 keeps doing its own local
-  fan-speed job untouched — this system only adds the humidity layer and
-  the visibility the controller never had.
+- If your tent has a separate exhaust fan controller, it keeps doing its
+  own local fan-speed job untouched — this system only adds the humidity
+  layer and the visibility the controller never had.
 
 ## Not in this build
 
@@ -346,5 +319,5 @@ Released under the MIT License (see `LICENSE`). It is provided as-is with no
 warranty, and you are responsible for the safety of your own installation,
 including anything involving mains power, water, and electrical equipment.
 This project is not affiliated with or endorsed by Home Assistant, ESPHome,
-Shelly, TP-Link/Kasa, Reolink, Tailscale, or any product or brand it mentions.
+Tailscale, or any other product or brand it mentions.
 Product names and links are examples, and prices and availability change.

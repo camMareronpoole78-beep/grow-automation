@@ -10,8 +10,8 @@
 #   - input_button.watered_4x4, fed_4x4, watered_5x5, fed_5x5
 #   - sensor.worst_case_flower_tent_humidity, sensor.lung_room_humidity
 #   - switch.dehumidifier, switch.humidifier, switch.light_4x4, switch.light_5x5  <- these
-#     are the entity IDs the 4 Kasa Matter plugs registered as.
-#   - notify.my_phone  <- the real HA Companion app notify entity (Android).
+#     are example entity IDs; rename your smart plugs to match, or edit them here.
+#   - notify.my_phone  <- your HA Companion app notify entity.
 
 - id: dehumidify_on_worst_case_flower_tent
   alias: "Climate — Dehumidifier ON (worst-case flower tent)"

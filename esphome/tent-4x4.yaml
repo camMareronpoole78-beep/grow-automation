@@ -1,6 +1,6 @@
 # ESPHome node for the 4x4 tent.
-# Monitoring/alerting only — the AC Infinity controller already runs the
-# exhaust fan off its own probe. This node exists so you can SEE what it's
+# Monitoring/alerting only — the exhaust fan controller already runs the
+# fan off its own probe. This node exists so you can SEE what it's
 # doing and get alerted if in-canopy humidity drifts even while the lung
 # room reads fine.
 #

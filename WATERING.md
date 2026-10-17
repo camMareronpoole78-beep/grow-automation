@@ -1,11 +1,11 @@
-# Single-pump drip watering: 4x4 + 5x5 (five 20-gallon pots)
+# Single-pump drip watering: 4x4 + 5x5 (five pots)
 
-The pump you already have sits in the rolling garbage-can reservoir and waters
+The pump sits in a reservoir (a large can or bucket) and waters
 **all five pots at once**: one in the 4x4 and four in the 5x5. There are no valves,
-no manifold, and no extra ESP32. A Shelly Plug US Gen4 switches the pump. The
+no manifold, and no extra ESP32. A smart plug with power monitoring and a built-in auto-off timer switches the pump. The
 moisture probes on your existing 4x4 and 5x5 tent boards tell Home Assistant when
 to water. Watering only happens while the lights are on, currently 7 PM to 7 AM.
-The Shelly's own auto-off timer is the safety backstop if Home Assistant or Wi-Fi
+The plug's own auto-off timer is the safety backstop if Home Assistant or Wi-Fi
 drops out mid-run.
 
 Parts and prices are in `SHOPPING-LIST-WATERING.md`.
@@ -13,7 +13,7 @@ Parts and prices are in `SHOPPING-LIST-WATERING.md`.
 ## What changed from the last version
 
 - **Removed:** both solenoid valves, the closet manifold, the closet watering-controller ESP32 (`watering-controller.yaml` is deleted), the MOSFET/relay board, the 12 V supply and buck converter, the diodes, the check valve, and the flow meter.
-- **Pump control:** the pump runs from one Shelly plug (`switch.reservoir_pump`). Home Assistant turns it on for each pulse, and the plug's auto-off (set to 15 min) cuts it if anything hangs. A 13-minute runaway automation in HA backs that up.
+- **Pump control:** the pump runs from one smart plug (`switch.reservoir_pump`). Home Assistant turns it on for each pulse, and the plug's auto-off (set to 15 min) cuts it if anything hangs. A 13-minute runaway automation in HA backs that up.
 - **Sizing:** one "gallons per pot" setting now applies to every pot, because all five share one pump and one run time. The defaults are 1.5 gal per pot, three pulses, and 10-minute soaks.
 - **Trigger:** pick **Either tent is dry** (the default) or **Both tents are dry**. Each tent keeps its own dryness threshold. The rule also re-checks at lights-on, and there's a 12-hour cooldown based on your watered log.
 - **Reservoir:** without a float-switch board, Home Assistant keeps a running estimate of the gallons in the can. It subtracts each pulse, and you press **Reservoir refilled** after filling. It won't start a watering that would take the can below the reserve. A float switch wired to one existing tent board is optional (`esphome/reservoir-float.yaml`).
@@ -36,11 +36,11 @@ All pots water together, so the pump-on time depends only on gallons per pot ÷ 
 | Whole watering, start to finish | about 31 min |
 | Flow the pump must supply | 5 pots × 8 GPH = 40 GPH (about 0.7 gal/min) |
 
-At the 2-gallon maximum per pot, a watering uses 10 gallons, with 3 pulses of 5 minutes each. If your drippers only add up to 4 GPH per pot, every time doubles. Home Assistant refuses pulses longer than 12 minutes, so the Shelly's 15-minute auto-off never cuts off a normal pulse. If you ever hit that limit, add a pulse.
+At the 2-gallon maximum per pot, a watering uses 10 gallons, with 3 pulses of 5 minutes each. If your drippers only add up to 4 GPH per pot, every time doubles. Home Assistant refuses pulses longer than 12 minutes, so the plug's 15-minute auto-off never cuts off a normal pulse. If you ever hit that limit, add a pulse.
 
 ## Plumbing
 
-The water path is pump, then a short hose, then the 150-mesh hose-thread filter, then the drip kit's 5-way splitter. From the splitter, **one 1/4" line runs to each pot**: one to the 4x4 pot and four to the 5x5 pots. Each line ends in that pot's drippers (2 to 4 adjustable drippers per pot). Giving every pot its own line from one splitter keeps the flow even. With the 12 drippers in one HIRALIY kit, you can do 2 per pot. For 4 per pot, get a second kit or the Orbit emitter pack.
+The water path is pump, then a short hose, then the 150-mesh hose-thread filter, then the drip kit's 5-way splitter. From the splitter, **one 1/4" line runs to each pot**: one to the 4x4 pot and four to the 5x5 pots. Each line ends in that pot's drippers (2 to 4 adjustable drippers per pot). Giving every pot its own line from one splitter keeps the flow even. With a typical 12-dripper kit, you can do 2 per pot. For 4 per pot, get a second kit or an emitter pack.
 
 - **Same drippers in every pot.** The whole design assumes every pot gets the same flow. Use adjustable drippers so you can even them out. The 4x4's single pot on a short line tends to get a little more than the far 5x5 pots. Pressure-compensating drippers would even this out automatically, but most need about 10 psi, which a small submersible pump may not reach at tent height.
 - **Siphon break instead of a check valve.** When the pump stops, water can keep siphoning out of the can if any dripper sits below the can's water line. Drill a 1/16" hole in the delivery tube at its highest point, just inside the rim of the can, so it drips back into the can. When the pump stops, air gets in through the hole and the siphon breaks. It costs you a small trickle back into the can while the pump runs, and that's all.
@@ -51,13 +51,13 @@ The water path is pump, then a short hose, then the 150-mesh hose-thread filter,
 
 ## Wiring
 
-- **Pump:** plug the pump into the Shelly Plug US Gen4, the Shelly into a GFCI adapter (skip the adapter if the outlet is already GFCI), and that into the wall. You don't do any mains wiring.
+- **Pump:** plug the pump into the smart plug, the smart plug into a GFCI adapter (skip the adapter if the outlet is already GFCI), and that into the wall. You don't do any mains wiring.
 - **Moisture probe, one per tent board:** probe VCC to 3V3, GND to GND, and AOUT to GPIO34. The BME280 stays on GPIO21/22. In the 5x5, put the probe in one representative pot.
 - **Optional float switch:** connect it between GPIO25 and GND on whichever tent board is closest to the can, using a 2-conductor wire run. Uncomment the `reservoir_float` line in that board's YAML only. Mount it a few inches above the pump intake, oriented so it's **closed while water is above it**.
 
 ## Setup
 
-1. **Shelly.** Add the plug in the Shelly app and join it to your Wi-Fi. Set **Auto off** to 900 seconds. In HA, add it through Settings > Devices & Services > Add Integration > Shelly (local, no cloud needed), then rename it "Reservoir Pump" so the entities become `switch.reservoir_pump` and `sensor.reservoir_pump_power`.
+1. **Pump plug.** Set the plug up with its own app or integration and join it to your Wi-Fi. In the plug's own settings, set its **auto-off timer** to 900 seconds (15 min), since that is the backstop if HA or Wi-Fi drops. Add it in HA (local control preferred), then rename it "Reservoir Pump" so the entities become `switch.reservoir_pump` and `sensor.reservoir_pump_power`. The plug must report power draw, because the pump health check uses it.
 2. **Probes.** Flash `tent-4x4.yaml` and `tent-5x5.yaml` over the air, the same way you normally update them. To calibrate a probe, temporarily remove its `calibrate_linear` filter. Note the voltage in dry mix and then in a glass of water, put both numbers into `calibrate_linear`, and reflash.
 3. **Package.** Copy `homeassistant/packages/watering.yaml` into `config/packages/`, and add this once to `configuration.yaml`:
    ```yaml
