@@ -1,0 +1,154 @@
+# A single Lovelace view for the whole garden. Add as a new dashboard
+# (Settings > Dashboards > + Add Dashboard > "New dashboard from scratch",
+# then Edit Dashboard > 3-dot menu > "Edit in YAML" and paste this in),
+# or fold the "cards:" list into an existing view.
+
+title: Grow
+views:
+  - title: Grow
+    path: grow
+    icon: mdi:sprout
+    cards:
+      - type: heading
+        heading: Climate
+
+      - type: entities
+        title: Lung Room (drives humidifier/dehumidifier)
+        entities:
+          - sensor.lung_room_temperature
+          - sensor.lung_room_humidity
+          - sensor.lung_room_vpd
+          - switch.humidifier
+          - switch.dehumidifier
+
+      - type: entities
+        title: 4x4 Tent
+        entities:
+          - sensor.4x4_tent_temperature
+          - sensor.4x4_tent_humidity
+          - sensor.4x4_tent_vpd
+          - switch.light_4x4
+          - input_datetime.light_4x4_on_time
+          - input_datetime.light_4x4_off_time
+
+      - type: picture-entity
+        title: 4x4 Camera
+        entity: camera.tent_4x4
+
+      - type: entities
+        title: 5x5 Tent
+        entities:
+          - sensor.5x5_tent_temperature
+          - sensor.5x5_tent_humidity
+          - sensor.5x5_tent_vpd
+          - switch.light_5x5
+          - input_datetime.light_5x5_on_time
+          - input_datetime.light_5x5_off_time
+
+      - type: picture-entity
+        title: 5x5 Camera
+        entity: camera.tent_5x5
+
+      - type: entities
+        title: Climate Targets
+        entities:
+          - input_number.tent_humidity_high_target
+          - input_number.lung_room_humidity_low_target
+          - input_number.humidity_hysteresis
+
+      - type: heading
+        heading: Feed & Water Log
+
+      - type: markdown
+        title: Feed Reference
+        content: >
+          **Craft Blend soil** — plain water alone can carry a full crop;
+          everything below is optional/supplemental. Max once a week per
+          product, don't stack everything in one watering.
+
+
+          **Real Growers Recharge** — 1/2 tsp/gal, weekly from first roots
+          through bloom, **stop 2 weeks before harvest**.
+
+
+          **BuildABloom (Vegan Bloom Booster)** — 1 tsp/gal soil drench,
+          weekly, **bloom/fruiting phase only**.
+
+
+          **Watering volume (20 gal pots)** — 1-2 gallons per watering
+          (5-10% of soil volume); matches your roughly-weekly schedule.
+
+
+          **Microbe Life Vitamins & Amino Acids** — 1-2 oz per 10 gal
+          (or ~1-1.5 tsp/gal), once or twice weekly.
+
+
+          **TPS Plant Foods Worm Casting/Microbes+Humates** — 1-2 tsp/gal
+          feedwater. Spring/Summer: weekly. Fall/Winter: every 4-8 weeks.
+
+      - type: entities
+        title: 4x4
+        entities:
+          - input_button.watered_4x4
+          - input_button.fed_4x4
+          - input_datetime.last_watered_4x4
+          - input_datetime.last_fed_4x4
+
+      - type: entities
+        title: 5x5
+        entities:
+          - input_button.watered_5x5
+          - input_button.fed_5x5
+          - input_datetime.last_watered_5x5
+          - input_datetime.last_fed_5x5
+
+      - type: entities
+        title: Settings
+        entities:
+          - input_number.days_between_waterings
+
+      - type: heading
+        heading: Auto-watering (single pump, all 5 pots, lights-on only)
+
+      - type: entities
+        title: Pump & schedule
+        entities:
+          - input_boolean.watering_enabled
+          - input_select.watering_trigger
+          - binary_sensor.watering_window
+          - switch.reservoir_pump
+          - sensor.reservoir_pump_power
+          - input_number.pump_min_watts
+          - script.water_all_pots
+
+      - type: entities
+        title: Reservoir
+        entities:
+          - input_number.reservoir_gallons
+          - sensor.waterings_left_in_reservoir
+          - input_button.reservoir_refilled
+          - input_number.reservoir_capacity_gal
+          - input_number.reservoir_reserve_gal
+
+      - type: entities
+        title: Watering size (every pot gets the same)
+        entities:
+          - input_number.water_gal_per_pot
+          - input_number.water_dripper_gph_per_pot
+          - input_number.water_pulses
+          - input_number.water_soak_minutes
+          - input_number.water_4x4_pots
+          - input_number.water_5x5_pots
+          - sensor.water_per_cycle
+          - sensor.watering_pump_time
+          - sensor.watering_pulse_length
+
+      - type: entities
+        title: Soil moisture
+        entities:
+          - sensor.4x4_tent_soil_moisture
+          - input_number.water_4x4_below
+          - input_datetime.last_watered_4x4
+          - sensor.5x5_tent_soil_moisture
+          - input_number.water_5x5_below
+          - input_datetime.last_watered_5x5

@@ -1,0 +1,104 @@
+# Paste these blocks into their matching top-level sections in
+# configuration.yaml (or split into helpers.yaml and add
+# `input_number: !include helpers.yaml` style includes — your call).
+# These are the "variables" the automations.yaml file reacts to.
+
+# NOTE: these helpers deliberately have NO "initial:" value. In Home Assistant
+# "initial:" resets the value on every restart, which would silently undo the
+# humidity ceiling you step down as the crop matures and any light schedule change.
+# Without it, HA remembers your last value. After the first start, SET THESE ONCE
+# from the dashboard (Climate Targets + the light on/off times); until you do,
+# the humidity ceiling starts at its minimum (30%) and the lights at 00:00.
+#   Suggested starting values: ceiling 55, floor 45, hysteresis 3,
+#   days between waterings 7, lights 19:00 on / 07:00 off (12/12).
+
+input_number:
+  # Dehumidify target — keyed off whichever main tent (4x4/5x5) reads
+  # highest humidity. Start around 55% early in bloom/fruiting, drop toward 45%
+  # as the crop matures to cut mold (botrytis) risk; adjust as you go.
+  tent_humidity_high_target:
+    name: "Tent Humidity Ceiling"
+    min: 30
+    max: 70
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:water-percent
+
+  # Humidify target — keyed off the LUNG ROOM reading, not the tents.
+  # Low humidity is a room-supply problem (dry climate air); the tents can only
+  # add humidity via canopy transpiration, they can't manufacture it below
+  # what the room is feeding them.
+  lung_room_humidity_low_target:
+    name: "Lung Room Humidity Floor"
+    min: 20
+    max: 60
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:water-percent
+
+  humidity_hysteresis:
+    name: "Humidity Hysteresis"
+    min: 1
+    max: 10
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:swap-vertical
+
+  days_between_waterings:
+    name: "Days Between Waterings"
+    min: 3
+    max: 14
+    step: 1
+    icon: mdi:calendar-clock
+
+input_datetime:
+  # Example schedules: 12/12 = 7pm on, 7am off. 18/6 = 7pm on, 1pm off.
+  light_4x4_on_time:
+    name: "4x4 Light On"
+    has_time: true
+    has_date: false
+  light_4x4_off_time:
+    name: "4x4 Light Off"
+    has_time: true
+    has_date: false
+  light_5x5_on_time:
+    name: "5x5 Light On"
+    has_time: true
+    has_date: false
+  light_5x5_off_time:
+    name: "5x5 Light Off"
+    has_time: true
+    has_date: false
+
+  # Auto-updated by the input_button automations below — don't hand-edit
+  # these day to day, just press the buttons on the dashboard.
+  last_watered_4x4:
+    name: "4x4 Last Watered"
+    has_time: true
+    has_date: true
+  last_fed_4x4:
+    name: "4x4 Last Fed"
+    has_time: true
+    has_date: true
+  last_watered_5x5:
+    name: "5x5 Last Watered"
+    has_time: true
+    has_date: true
+  last_fed_5x5:
+    name: "5x5 Last Fed"
+    has_time: true
+    has_date: true
+
+input_button:
+  watered_4x4:
+    name: "4x4 — Watered"
+    icon: mdi:watering-can
+  fed_4x4:
+    name: "4x4 — Fed"
+    icon: mdi:leaf
+  watered_5x5:
+    name: "5x5 — Watered"
+    icon: mdi:watering-can
+  fed_5x5:
+    name: "5x5 — Fed"
+    icon: mdi:leaf

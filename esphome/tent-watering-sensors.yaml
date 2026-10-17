@@ -1,0 +1,41 @@
+# tent-watering-sensors.yaml  (ESPHome package)
+# Soil moisture probe for auto-watering, added to the existing tent-4x4 and tent-5x5
+# sensor boards (included from tent-4x4.yaml and tent-5x5.yaml).
+# Wiring (capacitive probe -> ESP32): VCC -> 3V3, GND -> GND, AOUT -> GPIO34.
+# The BME280 keeps GPIO21/22. In the 5x5, put the probe in ONE representative pot.
+sensor:
+  - platform: adc
+    pin: GPIO34
+    name: "${friendly_name} Soil Moisture"
+    attenuation: 12db
+    update_interval: 30s
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    filters:
+      - sliding_window_moving_average:
+          window_size: 10
+          send_every: 2
+      - calibrate_linear:
+          - 2.60 -> 0      # REPLACE: probe voltage in bone-dry mix
+          - 1.20 -> 100    # REPLACE: probe voltage in a glass of water
+      - clamp:
+          min_value: 0
+          max_value: 100
+
+  # OPTIONAL pot scale (4x 50 kg half-bridge cells + HX711 under one pot).
+  # Uncomment if you add one: DT -> GPIO32, SCK -> GPIO33, VCC -> 3V3, GND -> GND.
+  # - platform: hx711
+  #   name: Pot Weight
+  #   dout_pin: GPIO32
+  #   clk_pin: GPIO33
+  #   gain: 128
+  #   update_interval: 10s
+  #   unit_of_measurement: g
+  #   accuracy_decimals: 0
+  #   filters:
+  #     - median:
+  #         window_size: 5
+  #         send_every: 3
+  #     - calibrate_linear:
+  #         - 80000 -> 0        # REPLACE: raw reading, empty platform
+  #         - 520000 -> 10000   # REPLACE: raw reading with a known 10 kg on it

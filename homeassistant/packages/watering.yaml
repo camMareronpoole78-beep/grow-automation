@@ -1,0 +1,393 @@
+# watering.yaml  (Home Assistant package) -- single-pump drip watering, 4x4 + 5x5.
+# The existing submersible pump in the reservoir can runs ALL FIVE 20-gal pots at once
+# (1 in the 4x4, 4 in the 5x5) through one drip line. No valves, no manifold, no closet
+# board. The pump is on a Shelly Plug US Gen4 renamed "Reservoir Pump", with its own
+# auto-off timer set to 900 s (15 min) in the Shelly app as the safety backstop.
+# Any other tent is watered by hand, and feeding stays manual.
+#
+# SIZING: every pot gets the same drippers and they all run together, so
+#   run time (min)  = gallons per pot / dripper GPH per pot x 60
+#   water per cycle = total pots x gallons per pot   (5 x 1.5 = 7.5 gal by default)
+# split into pulses with soak breaks so the living soil absorbs it.
+#
+# WINDOW: only while BOTH tents' lights are on, from your existing light_4x4 / light_5x5
+# on and off times (currently 7 PM to 7 AM).
+#
+# RESERVOIR: HA keeps a running estimate of gallons in the can (it subtracts each pulse).
+# Press "Reservoir refilled" after you fill it. Watering is refused if a cycle would
+# take the can below the reserve. If you add the optional float switch
+# (esphome/reservoir-float.yaml on one tent board), that stops it too.
+#
+# Entity names assumed: switch.reservoir_pump, sensor.reservoir_pump_power (Shelly),
+# sensor.4x4_tent_soil_moisture, sensor.5x5_tent_soil_moisture (existing tent boards),
+# optional binary_sensor.4x4_tent_reservoir_low or binary_sensor.5x5_tent_reservoir_low,
+# notify.my_phone.
+#
+# Requires Home Assistant 2024.10 or newer (uses the "triggers:/actions:" syntax).
+# "initial:" values on the helpers below reset on EVERY HA restart. Delete an
+# initial: line once you've dialed that value in, to keep changes made in the UI.
+
+input_boolean:
+  watering_enabled:
+    name: Auto-watering enabled
+    icon: mdi:sprinkler-variant
+
+input_select:
+  watering_trigger:
+    name: Water when
+    options:
+      - Either tent is dry
+      - Both tents are dry
+    icon: mdi:water-check
+
+input_button:
+  reservoir_refilled:
+    name: Reservoir refilled
+    icon: mdi:water-plus
+
+input_number:
+  water_4x4_pots:
+    name: 4x4 pots on drip
+    min: 0
+    max: 6
+    step: 1
+    initial: 1
+    icon: mdi:flower-pot
+  water_5x5_pots:
+    name: 5x5 pots on drip
+    min: 0
+    max: 6
+    step: 1
+    initial: 4
+    icon: mdi:flower-pot
+  water_gal_per_pot:
+    name: Gallons per pot
+    min: 0.5
+    max: 2.0                    # BuildASoil: 5-10% of soil volume = 1-2 gal for 20 gal
+    step: 0.25
+    initial: 1.5
+    unit_of_measurement: gal
+  water_dripper_gph_per_pot:
+    name: Dripper flow per pot
+    min: 1
+    max: 24
+    step: 0.5
+    initial: 8                  # e.g. four 2-GPH drippers per pot; MEASURE yours (see WATERING.md)
+    unit_of_measurement: gal/h
+  water_pulses:
+    name: Pulses per watering
+    min: 1
+    max: 5
+    step: 1
+    initial: 3
+  water_soak_minutes:
+    name: Soak between pulses
+    min: 0
+    max: 30
+    step: 1
+    initial: 10
+    unit_of_measurement: min
+  water_4x4_below:
+    name: 4x4 dry below
+    min: 10
+    max: 80
+    step: 1
+    unit_of_measurement: "%"
+  water_5x5_below:
+    name: 5x5 dry below
+    min: 10
+    max: 80
+    step: 1
+    unit_of_measurement: "%"
+  reservoir_capacity_gal:
+    name: Reservoir usable capacity
+    min: 5
+    max: 60
+    step: 1
+    initial: 30                 # set to what your can actually holds when you fill it
+    unit_of_measurement: gal
+  reservoir_reserve_gal:
+    name: Reservoir reserve (keep above pump)
+    min: 1
+    max: 15
+    step: 0.5
+    initial: 5
+    unit_of_measurement: gal
+  reservoir_gallons:            # running estimate; NO initial so it survives restarts
+    name: Reservoir gallons (estimate)
+    min: 0
+    max: 60
+    step: 0.1
+    mode: box
+    unit_of_measurement: gal
+  pump_min_watts:
+    name: Pump minimum watts (0 = off)
+    min: 0
+    max: 500
+    step: 1
+    initial: 0                  # after a few runs, set a bit under the pump's normal draw
+    unit_of_measurement: W
+
+template:
+  - binary_sensor:
+      - name: Watering window
+        unique_id: watering_window
+        icon: mdi:weather-sunny-clock
+        state: >-
+          {% set ns = namespace(ok=true) %}
+          {% set n = now().strftime('%H:%M:%S') %}
+          {% for t in ['4x4', '5x5'] %}
+            {% set on = states('input_datetime.light_' ~ t ~ '_on_time') %}
+            {% set off = states('input_datetime.light_' ~ t ~ '_off_time') %}
+            {% set lit = (n >= on or n < off) if on > off else (on <= n < off) %}
+            {% if not lit %}{% set ns.ok = false %}{% endif %}
+          {% endfor %}
+          {{ ns.ok }}
+  - sensor:
+      - name: Watering pump time
+        unique_id: watering_pump_time
+        unit_of_measurement: min
+        icon: mdi:timer-outline
+        state: >-
+          {{ (states('input_number.water_gal_per_pot') | float(0)
+              / states('input_number.water_dripper_gph_per_pot') | float(1) * 60) | round(1) }}
+      - name: Watering pulse length
+        unique_id: watering_pulse_length
+        unit_of_measurement: min
+        icon: mdi:timer-sand
+        state: >-
+          {{ (states('input_number.water_gal_per_pot') | float(0)
+              / states('input_number.water_dripper_gph_per_pot') | float(1) * 60
+              / states('input_number.water_pulses') | float(1)) | round(1) }}
+      - name: Water per cycle
+        unique_id: water_per_cycle
+        unit_of_measurement: gal
+        icon: mdi:cup-water
+        state: >-
+          {{ ((states('input_number.water_4x4_pots') | float(0) + states('input_number.water_5x5_pots') | float(0))
+              * states('input_number.water_gal_per_pot') | float(0)) | round(2) }}
+      - name: Waterings left in reservoir
+        unique_id: waterings_left_in_reservoir
+        icon: mdi:water-sync
+        state: >-
+          {% set per = states('sensor.water_per_cycle') | float(0) %}
+          {% set usable = states('input_number.reservoir_gallons') | float(0)
+                          - states('input_number.reservoir_reserve_gal') | float(0) %}
+          {{ ((usable / per) | int(0)) if per > 0 and usable > 0 else 0 }}
+
+script:
+  water_all_pots:
+    alias: Water all pots (4x4 + 5x5, single pump)
+    mode: single
+    sequence:
+      - variables:
+          pots: "{{ states('input_number.water_4x4_pots') | int(0) + states('input_number.water_5x5_pots') | int(0) }}"
+          gal: "{{ states('input_number.water_gal_per_pot') | float(1.5) }}"
+          gph: "{{ states('input_number.water_dripper_gph_per_pot') | float(8) }}"
+          pulses: "{{ states('input_number.water_pulses') | int(3) }}"
+          soak_min: "{{ states('input_number.water_soak_minutes') | int(10) }}"
+          pulse_s: "{{ (gal / gph * 3600 / pulses) | int }}"
+          pulse_gal: "{{ pots * gal / pulses }}"
+          cycle_gal: "{{ pots * gal }}"
+          min_w: "{{ states('input_number.pump_min_watts') | float(0) }}"
+      - if:
+          - "{{ pulse_s > 720 }}"
+        then:
+          - action: notify.my_phone
+            data:
+              message: "Watering would need {{ (pulse_s / 60) | round(1) }} min pulses, over the 12 min limit (Shelly auto-off is 15). Add pulses or use faster drippers."
+          - stop: pulse too long
+      - if:
+          - "{{ states('input_number.reservoir_gallons') | float(0) - cycle_gal
+                < states('input_number.reservoir_reserve_gal') | float(5) }}"
+        then:
+          - action: notify.my_phone
+            data:
+              message: >-
+                Skipped watering: the reservoir is at about {{ states('input_number.reservoir_gallons') }} gal
+                and a watering takes {{ cycle_gal }}. Refill it, then press "Reservoir refilled".
+          - stop: reservoir estimate too low
+      - repeat:
+          count: "{{ pulses }}"
+          sequence:
+            - if:
+                - "{{ not is_state('binary_sensor.watering_window', 'on') }}"
+              then:
+                - action: notify.my_phone
+                  data:
+                    message: "Stopped watering after {{ repeat.index - 1 }} of {{ pulses }} pulses: lights are off."
+                - stop: lights off
+            - if:
+                - "{{ is_state('binary_sensor.4x4_tent_reservoir_low', 'on') or is_state('binary_sensor.5x5_tent_reservoir_low', 'on') }}"
+              then:
+                - action: notify.my_phone
+                  data:
+                    message: "Stopped watering after {{ repeat.index - 1 }} of {{ pulses }} pulses: float switch says the reservoir is low."
+                - stop: float low
+            - action: switch.turn_on
+              target:
+                entity_id: switch.reservoir_pump
+            - delay: 8
+            - variables:
+                watts: "{{ states('sensor.reservoir_pump_power') | float(0) }}"
+            - if:
+                - "{{ watts < 2 or (min_w > 0 and watts < min_w) }}"
+              then:
+                - action: switch.turn_off
+                  target:
+                    entity_id: switch.reservoir_pump
+                - action: notify.my_phone
+                  data:
+                    message: >-
+                      Stopped watering: the pump is drawing {{ watts }} W
+                      {{ '(no power, or the Shelly is offline: tripped GFCI, dead pump, or Wi-Fi?)' if watts < 2 else '(below normal: running dry or clogged intake?)' }}
+                - stop: pump power abnormal
+            - delay: "{{ [ (pulse_s | int) - 8, 1 ] | max }}"
+            - action: switch.turn_off
+              target:
+                entity_id: switch.reservoir_pump
+            - action: input_number.set_value
+              target:
+                entity_id: input_number.reservoir_gallons
+              data:
+                value: "{{ [ states('input_number.reservoir_gallons') | float(0) - pulse_gal, 0 ] | max | round(1) }}"
+            - if:
+                - "{{ repeat.index < pulses }}"
+              then:
+                - delay:
+                    minutes: "{{ soak_min }}"
+      - action: input_button.press      # log it like a hand watering, so your reminders stay right
+        target:
+          entity_id:
+            - input_button.watered_4x4
+            - input_button.watered_5x5
+
+automation:
+  - id: water_when_dry
+    alias: Water all pots when the probes say dry (lights-on only)
+    mode: single
+    max_exceeded: silent
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.4x4_tent_soil_moisture
+        below: input_number.water_4x4_below
+        for: "00:15:00"
+      - trigger: numeric_state
+        entity_id: sensor.5x5_tent_soil_moisture
+        below: input_number.water_5x5_below
+        for: "00:15:00"
+      # Re-check just after lights-on (2 min late on purpose: the watering_window
+      # sensor only refreshes on the minute, so firing at exactly lights-on can
+      # see the window as still closed and silently skip).
+      - trigger: time
+        at:
+          entity_id: input_datetime.light_4x4_on_time
+          offset: "00:02:00"
+      - trigger: time
+        at:
+          entity_id: input_datetime.light_5x5_on_time
+          offset: "00:02:00"
+      - trigger: state            # and when you flip the mode or turn auto-watering back on
+        entity_id:
+          - input_select.watering_trigger
+          - input_boolean.watering_enabled
+    conditions:
+      - condition: state
+        entity_id: input_boolean.watering_enabled
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.watering_window
+        state: "on"
+      - >-
+        {% set d4 = states('sensor.4x4_tent_soil_moisture') | float(100) < states('input_number.water_4x4_below') | float(0) %}
+        {% set d5 = states('sensor.5x5_tent_soil_moisture') | float(100) < states('input_number.water_5x5_below') | float(0) %}
+        {{ (d4 and d5) if is_state('input_select.watering_trigger', 'Both tents are dry') else (d4 or d5) }}
+      - >-
+        {% set last = [ as_timestamp(states('input_datetime.last_watered_4x4'), 0),
+                        as_timestamp(states('input_datetime.last_watered_5x5'), 0) ] | max %}
+        {{ now().timestamp() - last > 12 * 3600 }}
+    actions:
+      - variables:
+          before4: "{{ states('sensor.4x4_tent_soil_moisture') | float(0) }}"
+          before5: "{{ states('sensor.5x5_tent_soil_moisture') | float(0) }}"
+          dry4: "{{ before4 < states('input_number.water_4x4_below') | float(0) }}"
+          dry5: "{{ before5 < states('input_number.water_5x5_below') | float(0) }}"
+          logged_before: "{{ states('input_datetime.last_watered_5x5') }}"
+      - action: script.water_all_pots
+      - delay: "00:30:00"
+      - variables:
+          after4: "{{ states('sensor.4x4_tent_soil_moisture') | float(0) }}"
+          after5: "{{ states('sensor.5x5_tent_soil_moisture') | float(0) }}"
+      # Only check the result if the watering actually finished (it logs the watered time).
+      - if:
+          - "{{ states('input_datetime.last_watered_5x5') != logged_before
+                and ((dry4 and after4 < before4 + 5) or (dry5 and after5 < before5 + 5)) }}"
+        then:
+          - action: notify.my_phone
+            data:
+              message: >-
+                Watered all pots, but a dry tent's moisture barely moved (4x4 {{ before4 | round(0) }}% to {{ after4 | round(0) }}%,
+                5x5 {{ before5 | round(0) }}% to {{ after5 | round(0) }}%). Check the filter, drippers, pump, and probe placement.
+
+  - id: reservoir_refilled
+    alias: Reservoir refilled, reset estimate
+    triggers:
+      - trigger: state
+        entity_id: input_button.reservoir_refilled
+    actions:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.reservoir_gallons
+        data:
+          value: "{{ states('input_number.reservoir_capacity_gal') | float(30) }}"
+
+  - id: reservoir_low_estimate
+    alias: Reservoir running low (estimate)
+    triggers:
+      - trigger: state
+        entity_id: sensor.waterings_left_in_reservoir
+        to: "1"
+        not_from:
+          - unavailable
+          - unknown
+      - trigger: state
+        entity_id: sensor.waterings_left_in_reservoir
+        to: "0"
+        not_from:
+          - unavailable
+          - unknown
+    actions:
+      - action: notify.my_phone
+        data:
+          message: "Reservoir is down to about {{ states('input_number.reservoir_gallons') }} gal, {{ states('sensor.waterings_left_in_reservoir') }} watering(s) left. Refill and press Reservoir refilled."
+
+  - id: reservoir_float_low
+    alias: Reservoir float switch low, stop pump (only if the float is installed)
+    triggers:
+      - trigger: state
+        entity_id:
+          - binary_sensor.4x4_tent_reservoir_low
+          - binary_sensor.5x5_tent_reservoir_low
+        to: "on"
+    actions:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.reservoir_pump
+      - action: notify.my_phone
+        data:
+          message: Float switch says the reservoir is low. Pump stopped.
+
+  - id: pump_runaway
+    alias: Pump on too long, turn it off (backup to the Shelly auto-off)
+    triggers:
+      - trigger: state
+        entity_id: switch.reservoir_pump
+        to: "on"
+        for: "00:13:00"
+    actions:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.reservoir_pump
+      - action: notify.my_phone
+        data:
+          message: The reservoir pump ran 13 minutes straight, so Home Assistant turned it off. Check what left it on.

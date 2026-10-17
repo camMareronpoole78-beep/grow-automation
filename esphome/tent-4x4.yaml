@@ -1,0 +1,89 @@
+# ESPHome node for the 4x4 tent.
+# Monitoring/alerting only — the AC Infinity controller already runs the
+# exhaust fan off its own probe. This node exists so you can SEE what it's
+# doing and get alerted if in-canopy humidity drifts even while the lung
+# room reads fine.
+#
+# Wiring (BME280 breakout -> ESP32 DevKitC):
+#   VIN -> 3V3      GND -> GND
+#   SCL -> GPIO22   SDA -> GPIO21
+# Mount it at canopy height, not up by the light — you want what the plants feel.
+#
+# Flash with: esphome run tent-4x4.yaml  (from this folder, with secrets.yaml present)
+
+# Soil moisture probe on GPIO34 for auto-watering (clear of the BME280 on 21/22).
+# If this board is the one closest to the reservoir and you add the optional float
+# switch, uncomment the reservoir_float line (on ONE board only).
+packages:
+  watering_sensors: !include tent-watering-sensors.yaml
+  # reservoir_float: !include reservoir-float.yaml
+
+substitutions:
+  name: tent-4x4-sensor
+  friendly_name: "4x4 Tent"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "${friendly_name} Fallback"
+    password: !secret fallback_password
+
+captive_portal:
+logger:
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+i2c:
+  sda: GPIO21
+  scl: GPIO22
+  scan: true
+
+sensor:
+  - platform: bme280_i2c
+    address: 0x76  # check the boot log's i2c scan if the node doesn't show up — some boards ship at 0x77
+    update_interval: 60s
+    temperature:
+      name: "${friendly_name} Temperature"
+      id: tent_4x4_temp
+      unit_of_measurement: "°F"
+      filters:
+        - lambda: return x * (9.0/5.0) + 32.0;
+    humidity:
+      name: "${friendly_name} Humidity"
+      id: tent_4x4_hum
+    pressure:
+      name: "${friendly_name} Pressure"
+
+  - platform: template
+    name: "${friendly_name} VPD"
+    unit_of_measurement: "kPa"
+    accuracy_decimals: 2
+    icon: "mdi:water-thermometer"
+    update_interval: 60s
+    lambda: |-
+      float t_f = id(tent_4x4_temp).state;
+      float t_c = (t_f - 32.0) * (5.0/9.0);
+      float rh = id(tent_4x4_hum).state;
+      float svp = 0.61078 * exp((17.27 * t_c) / (t_c + 237.3));
+      float vpd = svp * (1.0 - (rh / 100.0));
+      return vpd;
+    # Note: this is AIR VPD, not leaf/canopy VPD — under LED the canopy
+    # typically runs ~2°F cooler than air, so real leaf VPD sits a bit
+    # lower than this number. Fine for alerting/trending; if you want
+    # true leaf VPD later, add an input_number offset in HA.

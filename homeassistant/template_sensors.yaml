@@ -1,0 +1,24 @@
+# Paste under the top-level `template:` section in configuration.yaml.
+# This is the "worst-case main tent" reading the dehumidify
+# automation reacts to: the max of the 4x4 and 5x5 humidity, not an average,
+# because a spike in either tent is a mold risk regardless of what the
+# other tent is doing.
+#
+# If one sensor is offline, this uses the other one (so you are never blind
+# to a spike). If BOTH are offline it goes "unavailable" instead of
+# reporting a fake 0%, and the sensor-offline failsafe in automations.yaml
+# takes over.
+
+- sensor:
+    - name: "Worst Case Flower Tent Humidity"
+      unique_id: worst_case_flower_tent_humidity
+      unit_of_measurement: "%"
+      icon: mdi:water-alert
+      availability: >
+        {{ states('sensor.4x4_tent_humidity') | is_number
+           or states('sensor.5x5_tent_humidity') | is_number }}
+      state: >
+        {% set vals = [states('sensor.4x4_tent_humidity'),
+                       states('sensor.5x5_tent_humidity')]
+                      | select('is_number') | map('float') | list %}
+        {{ vals | max }}

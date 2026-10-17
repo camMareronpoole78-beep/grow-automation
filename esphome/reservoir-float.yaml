@@ -1,0 +1,18 @@
+# reservoir-float.yaml  (ESPHome package) -- OPTIONAL float switch in the reservoir can.
+# Include it on ONE tent board only (whichever is closest to the can), by adding
+#   reservoir_float: !include reservoir-float.yaml
+# under that board's packages: block.
+# Wiring: float switch between GPIO25 and GND, 2-conductor wire run to the can.
+# Mount the float a few inches above the pump intake, oriented so the switch is
+# CLOSED while water is above it. Low water OR a cut wire both read "low".
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO25
+      mode:
+        input: true
+        pullup: true
+    name: "${friendly_name} Reservoir Low"
+    device_class: problem
+    filters:
+      - delayed_on_off: 5s     # ignore sloshing

@@ -1,0 +1,273 @@
+# Auto-watering for the 4x4 and 5x5 lives in packages/watering.yaml.
+# Feeding stays manual.
+#
+# Paste these into automations.yaml (or add via Settings > Automations >
+# Edit in YAML for each one individually if you'd rather do it through the UI).
+#
+# Before these will work you need, from helpers.yaml / template_sensors.yaml:
+#   - input_number.tent_humidity_high_target, lung_room_humidity_low_target, humidity_hysteresis, days_between_waterings
+#   - input_datetime.light_4x4_on_time, light_4x4_off_time, light_5x5_on_time, light_5x5_off_time, last_watered_*, last_fed_*
+#   - input_button.watered_4x4, fed_4x4, watered_5x5, fed_5x5
+#   - sensor.worst_case_flower_tent_humidity, sensor.lung_room_humidity
+#   - switch.dehumidifier, switch.humidifier, switch.light_4x4, switch.light_5x5  <- these
+#     are the entity IDs the 4 Kasa Matter plugs registered as.
+#   - notify.my_phone  <- the real HA Companion app notify entity (Android).
+
+- id: dehumidify_on_worst_case_flower_tent
+  alias: "Climate — Dehumidifier ON (worst-case flower tent)"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.worst_case_flower_tent_humidity
+      above: input_number.tent_humidity_high_target
+    - platform: time_pattern
+      minutes: "/5"
+  condition:
+    - condition: numeric_state
+      entity_id: sensor.worst_case_flower_tent_humidity
+      above: input_number.tent_humidity_high_target
+  action:
+    - service: switch.turn_on
+      target:
+        entity_id: switch.dehumidifier
+
+- id: dehumidify_off_worst_case_flower_tent
+  alias: "Climate — Dehumidifier OFF (worst-case flower tent, with hysteresis)"
+  trigger:
+    - platform: template
+      value_template: >
+        {{ states('sensor.worst_case_flower_tent_humidity') | is_number
+           and states('sensor.worst_case_flower_tent_humidity') | float
+               < (states('input_number.tent_humidity_high_target') | float(55)
+                  - states('input_number.humidity_hysteresis') | float(3)) }}
+    - platform: time_pattern
+      minutes: "/5"
+  condition:
+    - condition: template
+      value_template: >
+        {{ states('sensor.worst_case_flower_tent_humidity') | is_number
+           and states('sensor.worst_case_flower_tent_humidity') | float
+               < (states('input_number.tent_humidity_high_target') | float(55)
+                  - states('input_number.humidity_hysteresis') | float(3)) }}
+  action:
+    - service: switch.turn_off
+      target:
+        entity_id: switch.dehumidifier
+
+- id: humidify_on_lung_room
+  alias: "Climate — Humidifier ON (lung room)"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.lung_room_humidity
+      below: input_number.lung_room_humidity_low_target
+    - platform: time_pattern
+      minutes: "/5"
+  condition:
+    - condition: numeric_state
+      entity_id: sensor.lung_room_humidity
+      below: input_number.lung_room_humidity_low_target
+  action:
+    - service: switch.turn_on
+      target:
+        entity_id: switch.humidifier
+
+- id: humidify_off_lung_room
+  alias: "Climate — Humidifier OFF (lung room, with hysteresis)"
+  trigger:
+    - platform: template
+      value_template: >
+        {{ states('sensor.lung_room_humidity') | is_number
+           and states('sensor.lung_room_humidity') | float
+               > (states('input_number.lung_room_humidity_low_target') | float(40)
+                  + states('input_number.humidity_hysteresis') | float(3)) }}
+    - platform: time_pattern
+      minutes: "/5"
+  condition:
+    - condition: template
+      value_template: >
+        {{ states('sensor.lung_room_humidity') | is_number
+           and states('sensor.lung_room_humidity') | float
+               > (states('input_number.lung_room_humidity_low_target') | float(40)
+                  + states('input_number.humidity_hysteresis') | float(3)) }}
+  action:
+    - service: switch.turn_off
+      target:
+        entity_id: switch.humidifier
+
+# --- Sensor-offline failsafe. A dead sensor must never leave a humidifier
+# running unattended. If the lung room sensor is gone for 10 minutes the
+# humidifier is switched off. If both tent sensors are gone you get a
+# notification (the dehumidifier can't over-humidify, so it is left alone).
+
+- id: failsafe_lung_room_sensor_offline
+  alias: "Failsafe — Lung room sensor offline, humidifier OFF"
+  trigger:
+    - platform: state
+      entity_id: sensor.lung_room_humidity
+      to:
+        - unavailable
+        - unknown
+      for: "00:10:00"
+  action:
+    - service: switch.turn_off
+      target:
+        entity_id: switch.humidifier
+    - service: notify.my_phone
+      data:
+        message: "Lung room humidity sensor has been offline for 10 minutes. Humidifier turned OFF. Check the sensor's power and Wi-Fi."
+
+- id: failsafe_tent_sensors_offline
+  alias: "Failsafe — Both tent humidity sensors offline"
+  trigger:
+    - platform: state
+      entity_id: sensor.worst_case_flower_tent_humidity
+      to:
+        - unavailable
+        - unknown
+      for: "00:10:00"
+  action:
+    - service: notify.my_phone
+      data:
+        message: "Both tent humidity sensors have been offline for 10 minutes, so the dehumidifier is not being controlled. Check the sensors."
+
+- id: light_4x4_on
+  alias: "4x4 — Light ON"
+  trigger:
+    - platform: time
+      at: input_datetime.light_4x4_on_time
+  action:
+    - service: switch.turn_on
+      target:
+        entity_id: switch.light_4x4
+
+- id: light_4x4_off
+  alias: "4x4 — Light OFF"
+  trigger:
+    - platform: time
+      at: input_datetime.light_4x4_off_time
+  action:
+    - service: switch.turn_off
+      target:
+        entity_id: switch.light_4x4
+
+- id: light_5x5_on
+  alias: "5x5 — Light ON"
+  trigger:
+    - platform: time
+      at: input_datetime.light_5x5_on_time
+  action:
+    - service: switch.turn_on
+      target:
+        entity_id: switch.light_5x5
+
+- id: light_5x5_off
+  alias: "5x5 — Light OFF"
+  trigger:
+    - platform: time
+      at: input_datetime.light_5x5_off_time
+  action:
+    - service: switch.turn_off
+      target:
+        entity_id: switch.light_5x5
+
+# --- Feed/water logging: pressing a dashboard button stamps "now" onto the
+# matching input_datetime, which both the Logbook and the reminder
+# automations below read from. ---
+
+- id: log_watered_4x4
+  alias: "Log — 4x4 Watered"
+  trigger:
+    - platform: state
+      entity_id: input_button.watered_4x4
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.last_watered_4x4
+      data:
+        timestamp: "{{ now().timestamp() }}"
+
+- id: log_fed_4x4
+  alias: "Log — 4x4 Fed"
+  trigger:
+    - platform: state
+      entity_id: input_button.fed_4x4
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.last_fed_4x4
+      data:
+        timestamp: "{{ now().timestamp() }}"
+
+- id: log_watered_5x5
+  alias: "Log — 5x5 Watered"
+  trigger:
+    - platform: state
+      entity_id: input_button.watered_5x5
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.last_watered_5x5
+      data:
+        timestamp: "{{ now().timestamp() }}"
+
+- id: log_fed_5x5
+  alias: "Log — 5x5 Fed"
+  trigger:
+    - platform: state
+      entity_id: input_button.fed_5x5
+  action:
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.last_fed_5x5
+      data:
+        timestamp: "{{ now().timestamp() }}"
+
+- id: remind_water_4x4
+  alias: "Reminder — 4x4 Needs Water"
+  trigger:
+    - platform: time
+      at: "09:00:00"
+  condition:
+    - condition: template
+      value_template: >
+        {{ ((now().timestamp() - as_timestamp(states('input_datetime.last_watered_4x4'), 0)) / 86400) | int
+           >= (states('input_number.days_between_waterings') | int(7)) }}
+  action:
+    - service: notify.my_phone
+      data:
+        message: >-
+          4x4 tent is due for water. Last watered: {{ 'never logged' if as_timestamp(states('input_datetime.last_watered_4x4'), 0) < 86400 else as_datetime(states('input_datetime.last_watered_4x4')).strftime('%a %b %d, %I:%M %p') }}
+
+- id: remind_water_5x5
+  alias: "Reminder — 5x5 Needs Water"
+  trigger:
+    - platform: time
+      at: "09:00:00"
+  condition:
+    - condition: template
+      value_template: >
+        {{ ((now().timestamp() - as_timestamp(states('input_datetime.last_watered_5x5'), 0)) / 86400) | int
+           >= (states('input_number.days_between_waterings') | int(7)) }}
+  action:
+    - service: notify.my_phone
+      data:
+        message: >-
+          5x5 tent is due for water. Last watered: {{ 'never logged' if as_timestamp(states('input_datetime.last_watered_5x5'), 0) < 86400 else as_datetime(states('input_datetime.last_watered_5x5')).strftime('%a %b %d, %I:%M %p') }}
+
+- id: remind_lower_humidity_target
+  alias: "Reminder — Review Tent Humidity Ceiling"
+  trigger:
+    - platform: time
+      at: "09:00:00"
+  condition:
+    - condition: template
+      value_template: "{{ now().weekday() == 0 }}"
+  action:
+    - service: notify.my_phone
+      data:
+        message: >
+          Weekly check: tent humidity ceiling is currently
+          {{ states('input_number.tent_humidity_high_target') }}%. Step it
+          down as the crop matures to cut mold risk — roughly 50-55%
+          early, ~45% mid-bloom, 40% or lower in the final 2-3 weeks
+          before harvest.
+
